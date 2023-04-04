@@ -91,6 +91,62 @@ class Robot:
             self.opinion_update_routine()
             self.neighbour_message = None
         
+    def motion_routine(self):
+        """
+        Handle motion of Robot. Move towards current waypoint at each timestep.
+        Pick new waypoint if destination reached.
+        """
+        distance_to_waypoint = self.get_distance_to_point(self.chosen_waypoint)
+        step_size = self.env_interval * self.speed
+        if distance_to_waypoint < step_size:
+            if np.isclose(distance_to_waypoint, 0):
+                # Pick new waypoint
+                self.choose_random_waypoint()
+                self.get_motion_vector()
+            else:
+                self.update_position(self.motion_vector[0] * distance_to_waypoint, self.motion_vector[1] * distance_to_waypoint)
+        else:
+            self.update_position(self.motion_vector[0] * step_size, self.motion_vector[1] * step_size)
+     
+    def opinion_update_routine(self):
+        """
+        Given current evidence and state, update opinion
+        """
+        if self.sample_evidence and self.neighbour_message != None:
+            if random.uniform(0,1) > 0.5:
+                self.discovery_transition()
+            else:
+                self.social_transition()
+        elif self.sample_evidence:
+            self.discovery_transition()
+        elif self.neighbour_message != None:
+            self.social_transition()
+
+    def sampling_routine(self, env_grid):
+        """
+        The sample routine to be called every after every sample_interval length of time.
+        parameters:
+          env_grid: (List[List : int]) The current grid of the environment
+        """
+        if self.sample_colour == None:
+            self.start_sample_routine(env_grid)
+        else:
+            if self.sample_count < self.sample_cycle_length:
+                self.take_sample(env_grid)
+            else:
+                self.handle_end_of_sample_cycle()
+
+    def broadcasting_routine(self, robots):
+        """
+        Sends signals to neighbours of opinion. To be called after broadcast_interval amount of time.
+        params:
+          robots: (List : Robot)
+        """
+        if self.decision_state != 0:
+            for neighbour_index in self.find_all_neighbours(robots):
+                robots[neighbour_index].neighbour_message = self.decision_state
+
+    # Motion helper functions
     def choose_random_waypoint(self):
         """
         Choose a coordinate uniformly at random from the grid
@@ -108,24 +164,6 @@ class Robot:
         magnitude = math.sqrt(x**2 + y**2)
         self.motion_vector =  x / magnitude, y / magnitude
 
-    def motion_routine(self):
-        """
-        Handle motion of Robot. Move towards current waypoint at each timestep.
-        Pick new waypoint if destination reached.
-        """
-        distance_to_waypoint = np.sqrt(np.square(self.chosen_waypoint[0] - self.position[0]) + np.square(self.chosen_waypoint[1] - self.position[1]))
-        step_size = self.env_interval * self.speed
-        if distance_to_waypoint < step_size:
-            if np.isclose(distance_to_waypoint, 0):
-                # Pick new waypoint
-                self.choose_random_waypoint()
-                #print(f"New waypoint: {self.chosen_waypoint}")
-                self.get_motion_vector()
-            else:
-                self.update_position(self.motion_vector[0] * distance_to_waypoint, self.motion_vector[1] * distance_to_waypoint)
-        else:
-            self.update_position(self.motion_vector[0] * step_size, self.motion_vector[1] * step_size)
-
     def update_position(self, x, y):
         """
         Move the robot.
@@ -134,130 +172,6 @@ class Robot:
           y: (float) y direction vector
         """
         self.position = self.position[0] + x, self.position[1] + y
-    
-    def opinion_update_routine(self):
-        """
-        Given self-sourced and/or social evidence, decide what opinion the robot should have. 
-        """
-        if self.sample_evidence and self.neighbour_message != None:
-            # Randomly choose between self-source and social evidence
-            if random.uniform(0,1) > 0.5:
-                # Use self-sourced evidence
-                # Discovery transition:
-                self.decision_state = self.sample_evidence
-                self.commited_estimation = self.self_evidence_estimate
-                self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
-                #print(f"{self.id}: Discovery transition")
-                # Reset sample evidence
-                self.sample_evidence = 0
-                self.sample_colour = None
-            else:
-                # Use social evidence
-                if self.decision_state != 0:
-                    if self.neighbour_message != self.decision_state:
-                        # Cross-inhibition transition
-                        self.decision_state = 0
-                        #print(f"{self.id}: Cross-inhibition transition")
-                        # Reset sample evidence
-                        self.sample_evidence = 0
-                        self.sample_colour = None
-                else:
-                    # Recruitment transition
-                    self.decision_state = self.neighbour_message
-                    self.commited_estimation = 0
-                    #print(f"{self.id}: Recruitment transition")
-                    # Reset sample evidence
-                    self.sample_count = 0
-                    self.sample_colour_occurences = 0
-                    self.commited_estimation = 0
-                self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
-        elif self.sample_evidence:
-            # Discovery transition:
-            #print(f"{self.id}: Discovery transition")
-            self.decision_state = self.sample_evidence
-            self.commited_estimation = self.self_evidence_estimate
-            self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
-            # Reset sample evidence
-            self.sample_evidence = 0
-            self.sample_colour = None
-        elif self.neighbour_message != None:
-            # Use social evidence
-            if self.decision_state != 0:
-                if self.neighbour_message != self.decision_state:
-                    # Cross-inhibition transition
-                    self.decision_state = 0
-                    self.commited_estimation = 0
-                    #print(f"{self.id}: Cross-inhibition transition")
-                    self.sample_colour = None
-            else:
-                # Recruitment transition
-                self.new_recruit = True
-                self.decision_state = self.neighbour_message
-                self.sample_colour = self.decision_state
-                #print(f"{self.id}: Recruitment transition")
-                self.sample_count = 0
-                self.sample_colour_occurences = 0
-                self.commited_estimation = 0
-                self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
-        
-    def sampling_routine(self, env_grid):
-        """
-        The sample routine to be called every after every sample_interval length of time.
-        parameters:
-          env_grid: (List[List : int]) The current grid of the environment
-        """
-        if self.sample_colour == None:
-            # Choose to sample colour of square at current location
-            col, row = self.get_square_robot_is_over()
-            self.sample_colour = env_grid[row][col]
-            self.sample_count = 0
-            self.sample_colour_occurences = 0
-            #print(f"New sample colour: {self.sample_colour}")
-        else:
-            if self.sample_count < self.sample_cycle_length:
-                if self.is_robot_over_sample_colour(env_grid):
-                    self.sample_colour_occurences += 1
-                self.sample_count += 1
-                if self.new_recruit:
-                    self.broadcast_frequency = 2 * min(2 * self.sample_colour_occurences / self.sample_cycle_length, 1)
-            else:
-                sample_colour_concentration = self.sample_colour_occurences / self.sample_count
-                if sample_colour_concentration > 1:
-                    print(f"ERROR: {sample_colour_concentration}, {self.sample_colour_occurences}, {self.sample_count}")
-                if self.sample_colour == self.decision_state and self.decision_state != 0:
-                    self.commited_estimation = sample_colour_concentration
-                    self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
-                elif sample_colour_concentration > self.commited_estimation or self.decision_state == 0:
-                    # Store colour and concentration estimate of sample for update decision
-                    self.sample_evidence = self.sample_colour
-                    self.self_evidence_estimate = sample_colour_concentration
-                    #print(f"end of sample: {self.sample_evidence}, {self.self_evidence_estimate}")
-                # End sample cycle
-                self.new_recruit = False
-                self.sample_colour = None
-                self.sample_colour_occurences = 0
-                self.sample_count = 0
-            
-    def broadcasting_routine(self, robots):
-        """
-        Sends signals to neighbours of opinion. To be called after broadcast_interval amount of time.
-        params:
-          robots: (List : Robot)
-        """
-        if self.decision_state != 0:
-            for neighbour_index in self.find_all_neighbours(robots):
-                robots[neighbour_index].neighbour_message = self.decision_state
-
-    def find_all_neighbours(self, robots):
-        neighbour_indices = []
-        for i, robot in enumerate(robots):
-            if self.get_distance_to_point(robot.position) < self.communication_range:
-                if i == self.id:
-                    continue
-                else:
-                    neighbour_indices.append(i)
-        return neighbour_indices
-
 
     def get_distance_to_point(self, point):
         """
@@ -267,6 +181,93 @@ class Robot:
         """
         return np.sqrt(np.square(self.position[0] - point[0]) + np.square(self.position[1] - point[1]))
 
+    # Opinion update helper functions
+    def discovery_transition(self):
+        """
+        Discovery transition
+        """
+        self.decision_state = self.sample_evidence
+        self.commited_estimation = self.self_evidence_estimate
+        self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
+        # Reset sample evidence
+        self.sample_evidence = 0
+        self.self_evidence_estimate = 0
+        self.sample_colour = None
+    
+    def cross_inhibition_transition(self):
+        """
+        Cross-inhibition transition
+        """
+        self.decision_state = 0
+        self.commited_estimation = 0
+        self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
+        # Reset sample evidence
+        self.sample_evidence = 0
+        self.self_evidence_estimate = 0
+        self.sample_colour = None
+    
+    def recruitment_transition(self):
+        """
+        Recruitment transition
+        """
+        self.decision_state = self.neighbour_message
+        self.sample_colour = self.decision_state
+        self.self_evidence_estimate = 0
+        self.sample_evidence = 0
+        self.sample_count = 0
+        self.sample_colour_occurences = 0
+        self.commited_estimation = 0
+        self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
+        self.new_recruit = True
+
+    def social_transition(self):
+        """
+        Handle transition given social evidence
+        """
+        if self.decision_state == 0:
+            self.recruitment_transition()
+        else:
+            if self.decision_state != self.neighbour_message:
+                self.cross_inhibition_transition()
+    
+    # Sampling helper functions
+    def start_sample_routine(self, env_grid):
+        """
+        parameters:
+          env_grid: (List[List : int]) The current grid of the environment
+        """
+        col, row = self.get_square_robot_is_over()
+        self.sample_colour = env_grid[row][col]
+        self.sample_count = 0
+        self.sample_colour_occurences = 0
+
+    def take_sample(self, env_grid):
+        """
+        Take a sample of the environment. If new recruit, update broadcast frequency.
+        parameters:
+          env_grid: (List[List : int]) The current grid of the environment
+        """
+        if self.is_robot_over_sample_colour(env_grid):
+            self.sample_colour_occurences += 1
+        self.sample_count += 1
+        if self.new_recruit:
+            self.broadcast_frequency = 2 * min(2 * self.sample_colour_occurences / self.sample_cycle_length, 1)
+
+    def handle_end_of_sample_cycle(self):
+        sample_colour_concentration = self.sample_colour_occurences / self.sample_count
+        if sample_colour_concentration > 1:
+            print(f"ERROR: {sample_colour_concentration}, {self.sample_colour_occurences}, {self.sample_count}")
+        if self.sample_colour == self.decision_state and self.decision_state != 0:
+            # Update committed colour estimate
+            self.commited_estimation = sample_colour_concentration
+            self.broadcast_frequency = 2 * min(2 * self.commited_estimation, 1)
+        elif sample_colour_concentration > self.commited_estimation or self.decision_state == 0:
+            if sample_colour_concentration > 0:
+                # Store colour and concentration estimate of sample for update decision
+                self.sample_evidence = self.sample_colour
+                self.self_evidence_estimate = sample_colour_concentration
+        self.new_recruit = False
+        self.sample_colour = None
 
     def is_robot_over_sample_colour(self, env_grid):
         """
@@ -283,3 +284,18 @@ class Robot:
         Given the Robot's current position, get the row and col index of the square it is currently on.
         """
         return math.floor(self.position[0]), math.floor(self.position[1])
+
+    # Broadcast helper functions
+    def find_all_neighbours(self, robots):
+        """
+        Find all neighbours within communication range
+        return: (List : int) List of indices of neighbours
+        """
+        neighbour_indices = []
+        for i, robot in enumerate(robots):
+            if self.get_distance_to_point(robot.position) < self.communication_range:
+                if i == self.id:
+                    continue
+                else:
+                    neighbour_indices.append(i)
+        return neighbour_indices
