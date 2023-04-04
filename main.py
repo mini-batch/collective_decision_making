@@ -10,6 +10,8 @@ Y_SQUARES = 40 # (number of rows)
 COLOUR_PROB = [0.8, 0.2]
 ENV_INTERVAL = 1
 GRID_SIZE = [X_SQUARES, Y_SQUARES]
+EXPERIMENT_LENGTH = 100000
+NUM_ROBOTS = 50
 
 # Robot parameters
 UPDATE_INTERVAL = 200
@@ -29,6 +31,7 @@ DISPLAY = (WIN_WIDTH, WIN_HEIGHT)
 DEPTH = 0
 FLAGS = 0
 
+
 import experiment_objects.tests as t
 def test():
     t.test_create_grid()
@@ -42,7 +45,7 @@ def visualise():
     running = True
 
     ROBOT_PARAMS = [UPDATE_INTERVAL, SAMPLE_CYCLE_LENGTH, SAMPLE_INTERVAL, SPEED, COMMUNICATION_RANGE, ENV_INTERVAL, GRID_SIZE, SAMPLE_COLOUR, DECISION_STATE, COMMITED_ESTIMATION, POSITION]
-    env = e.Environment([X_SQUARES,Y_SQUARES], COLOUR_PROB, ROBOT_PARAMS, ENV_INTERVAL, 15000)
+    env = e.Environment([X_SQUARES,Y_SQUARES], COLOUR_PROB, NUM_ROBOTS, ROBOT_PARAMS, ENV_INTERVAL, EXPERIMENT_LENGTH)
     manager = sm.SceneMananger(env)
 
     while running:
@@ -73,6 +76,6 @@ def main():
 
 if __name__=="__main__":
     #main()
-    experiment1()
-    #visualise()
+    #experiment1()
+    visualise()
     #test()

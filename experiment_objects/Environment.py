@@ -45,7 +45,8 @@ class Environment:
             for robot in self.robots:
                 robot.step_robot(self.grid, self.robots)
             if self.time % 200 == 0:
-                print(f"{self.time}: {self.get_state()}")
+                #print(f"{self.time}: {self.get_state()}")
+                print(f"{self.time}: {self.get_sampling_colour_counts()}")
             self.time += self.interval
             yield None
     
@@ -80,6 +81,18 @@ class Environment:
         for robot in self.robots:
             state_count[robot.decision_state] += 1
         return state_count
+
+    def get_sampling_colour_counts(self):
+        """
+        Count the number of robots in each sampling colour currently: undecided, colour 1, colour 2, ...
+        """
+        colour_count = [0 for i in range(self.num_states)]
+        for robot in self.robots:
+            if robot.sample_colour == None:
+                colour_count[0] += 1
+            else:
+                colour_count[robot.sample_colour] += 1
+        return colour_count
             
 
 def create_grid(size, colour_prob):
