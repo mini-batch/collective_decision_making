@@ -46,7 +46,13 @@ class Robot:
             self.position = position
 
         # The colour the robot is looking for
-        self.sample_colour = sample_colour
+        if sample_colour == None:
+            if random.uniform(0,1) > 0.2:
+                self.sample_colour = 2
+            else:
+                self.sample_colour = 1
+        else:
+            self.sample_colour = sample_colour
         # Number of occurences in sample of sample_colour
         self.sample_colour_occurences = 0
         # Is there self-evidence to be considered in the opinion update routine, non-zero if there is: int representing colour
