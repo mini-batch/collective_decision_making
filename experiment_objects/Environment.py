@@ -24,9 +24,10 @@ class Environment:
       time: (int) Simulate time in seconds
       interval: (float) How often to update the environment
     """
-    def __init__(self, grid_size, colour_prob, num_robots, robot_params, interval, experiment_length) -> None:
+    def __init__(self, grid_size, colour_prob, num_robots, robot_params, interval, experiment_length, gradual_change=None) -> None:
         self.grid_size = grid_size
         self.grid = create_grid(grid_size, colour_prob)
+        self.colour_prob = colour_prob
         self.majority_colour = np.argmax(colour_prob) + 1
         self.num_states = len(colour_prob) + 1
         self.num_robots = num_robots
@@ -37,16 +38,30 @@ class Environment:
         self.state_history = [self.get_state()]
         self.time_history = [0]
         self.adaptation_time = None
-    
+        if gradual_change == None:
+            self.gradual_change = gradual_change
+        else:
+            self.gradual_change = gradual_change
+            self.final_proportion = gradual_change[0] # proportion of majority colour at end of gradual change
+            self.change_time = gradual_change[1] # time it takes to reach final proportion
+            self.change_rate = 0.1 / (self.change_time / 300) # rate of change of proportion of majority colour
+
     def run_for_visual(self):
         while self.time < self.experiment_length:
-            #if self.time == 4000:
-            #    self.grid = create_grid(self.grid_size, [0.9,0.1])
+            if self.time % 100 == 0:
+                #print(f"Time: {self.time}")
+                pass
+            if self.gradual_change != None:
+                if self.time % 300 == 0 and self.time > 0 and self.time <= self.change_time:
+                    self.colour_prob = [self.colour_prob[0] - self.change_rate, self.colour_prob[1] + self.change_rate]
+                    self.grid = create_grid(self.grid_size, self.colour_prob)
+                    #print(f"Time: {self.time}, Colour Prob: {self.colour_prob}")
             for robot in self.robots:
                 robot.step_robot(self.grid, self.robots)
             if self.time % 200 == 0:
                 #print(f"{self.time}: {self.get_state()}")
-                print(f"{self.time}: {self.get_sampling_colour_counts()}")
+                #print(f"{self.time}: {self.get_sampling_colour_counts()}")
+                pass
             self.time += self.interval
             yield None
     
